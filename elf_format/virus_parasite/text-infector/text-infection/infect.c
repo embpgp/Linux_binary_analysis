@@ -7,6 +7,10 @@
  *
  */
 
+
+/*
+该注入算法由于是将text段从前面位置扩展0x1000，因此所有的表字段中，绝对加载地址-0x1000，偏移均+0x1000
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
