@@ -80,7 +80,8 @@ int main(int argc, char **argv)
  	}
 	
 	e_hdr = (Elf64_Ehdr *)mem;
- 	if (e_hdr->e_ident[0] != 0x7f && strcmp(&e_hdr->e_ident[1], "ELF"))
+	//这里条件应该为||
+ 	if (e_hdr->e_ident[0] != 0x7f || strcmp(&e_hdr->e_ident[1], "ELF"))
         {
                 printf("%s it not an elf file\n", argv[1]);
                 exit(-1);
@@ -92,7 +93,8 @@ int main(int argc, char **argv)
        unsigned int after_insertion_offset;
        ehdr_size = sizeof(*e_hdr);
        entry_point = e_hdr->e_entry; 
- 	
+		//由于程序头表中，text段的p_offset为0，其他的所有的类型表都比它大，因此就是导致所有的表都加了0x1000
+		//0 和 1为手动加， 2一般为text，text_found置为1之后，后面的的也会执行p_hdr->p_offset += PAGE_SIZE;
        p_hdr = (Elf64_Phdr *)(mem + e_hdr->e_phoff);
        p_hdr[0].p_offset += PAGE_SIZE;
        p_hdr[1].p_offset += PAGE_SIZE;
@@ -114,7 +116,7 @@ int main(int argc, char **argv)
 	        }
         }  
 	e_hdr->e_entry += sizeof(*e_hdr);
-
+	//因为是逆向拓展0x1000，因此所有的偏移相对于原来的文件头相当于off-0变成off-(-0x1000)=off+0x1000=off+PAGE_SIZE
 	 s_hdr = (Elf64_Shdr *)(mem + e_hdr->e_shoff);
 	 for (i = e_hdr->e_shnum; i-- > 0; s_hdr++)
 		s_hdr->sh_offset += PAGE_SIZE;
