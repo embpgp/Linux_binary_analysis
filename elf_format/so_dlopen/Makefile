@@ -10,7 +10,7 @@ main_d:main.o libpart.so libpart_dlp.so
 libpart.so:
 	gcc --shared -fPIC part.c -o libpart.so -g
 libpart_dlp.so:
-	gcc --shared -fPIC part_dlopen.c -o libpart_dlp.so -g
+	gcc --shared -fPIC part_dlopen.c -o libpart_dlp.so -g -Wl,-Bsymbolic
 main.o:main.c
 	gcc -c main.c -o main.o
 part.o:part.c
