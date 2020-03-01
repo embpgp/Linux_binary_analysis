@@ -1,5 +1,5 @@
-#ifndef _PART_H_
-#define _PART_H_
+#ifndef _PART_DLP_H_
+#define _PART_DLP_H_
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>

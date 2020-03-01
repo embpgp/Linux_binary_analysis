@@ -3,7 +3,12 @@
 
 extern int g_int1, g_int2;
 extern char *g_str1, *g_str2;
-int g_dlp = 22323;
+/*int g_dlp_func_3(int i)
+{
+	printf("[%s:%s:%d],i:%d\n", __FILE__, __func__, __LINE__, i);
+	return i;
+}*/
+int g_dlp = 11111; 
 int main(int argc, char **argv)
 {
 	void *handle = NULL;
@@ -13,7 +18,8 @@ int main(int argc, char **argv)
 	g_int1 = 9;
 	g_str1 = "defg";
 	char *err = NULL;
-	handle = dlopen ("./libpart_dlp.so", RTLD_LAZY);
+	g_dlp = g_dlp_func_3(22222);
+	handle = dlopen ("./libpart_dlp.so", /*RTLD_LAZY*/RTLD_NOW);
 	if (!handle) {  
         fprintf (stderr, "%s ", dlerror());  
         exit(1);  
